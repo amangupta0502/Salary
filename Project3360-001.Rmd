@@ -1,0 +1,243 @@
+---
+title: "Project3360-001"
+author: "Aman Gupta"
+date: "2023-08-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+ salary_data <- read.csv("salary.csv",header=TRUE, sep=",")
+head(salary_data)
+
+```
+```{r}
+ cat_data <- salary_data[,-c(3,11,12)]
+head(cat_data)
+```
+
+```{r}
+#install.packages("fastDummies")
+library(fastDummies)
+```
+
+```{r}
+#library(dplyr)
+#filtered_data <- cat_data[cat_data$`native.country`=='United-States',]
+#head(filtered_data,100) 
+```
+
+
+```{r}
+df_dummies <- dummy_cols(filtered_data, remove_first_dummy = TRUE)
+df_dummies <- df_dummies[,-c(1:12)]
+head(df_dummies)
+```
+
+```{r}
+#df_dummies <- dummy_cols(filtered_data, select_columns = 'salary', remove_selected_columns = TRUE)
+#head(df_dummies)
+```
+
+
+```{r}
+final_df <- cbind(salary_data$age,df_dummies)
+names(final_df)[1] <- "Age"
+head(final_df)
+```
+```{r}
+colnames(final_df)[colnames(final_df) == "salary_ >50K"] <- "salarygreater"
+print(colnames(final_df))
+```
+
+```{r}
+log_reg_resuls <- glm(salarygreater~.,data=final_df,family=binomial(link="logit"))
+summary(log_reg_resuls, scipen=999) 
+
+```
+```{r}
+with(log_reg_resuls, null.deviance-deviance)
+```
+```{r}
+options(scipen=999)
+with(log_reg_resuls,pchisq(null.deviance-deviance, df.null-df.residual, lower.tail = FALSE))
+```
+```{r}
+install.packages("MASS")
+library(MASS)
+```
+```{r}
+step_model_res <- stepAIC(log_reg_resuls, direction = "backward",trace=FALSE)
+options(scipen=999)
+summary(step_model_res)
+```
+
+```{r}
+exp(cbind(OddsRatio = coef(step_model_res), confint(step_model_res)))   
+```
+```{r}
+install.packages("randomForest")
+library(randomForest)
+
+```
+```{r}
+ind_vars <- final_df[,-c(56)]
+dv <- final_df[,c(56)]
+head(ind_vars)
+head(dv)
+```
+```{r}
+cor_vect <- cor(ind_vars,dv)
+#put column header
+colnames(cor_vect) <- "cor.coeff"
+cor_vect
+```
+```{r}
+#create an empty vector - will be used to store p-values
+p_val <- c()
+for (val in ind_vars){
+  p_val <- c(p_val,cor.test(val,dv)$p.value)
+}
+```
+```{r}
+#combine the correlation coefficients and the p-values into a data.frame
+cor_sigs_p <- as.data.frame(cbind(cor_vect,p_val))
+```
+
+```{r}
+#display the result rounded to 4 decimal places -- use round() function
+round(cor_sigs_p,4)
+```
+#Retaining only variables with p-val (cor_coeff) <=2
+```{r}
+ret_cor_sig_p <- cor_sigs_p %>% filter(p_val <=0.2)
+#colnames(ret_cor_sig_p) <-"ind_variables"
+round(ret_cor_sig_p,4)
+write.csv(ret_cor_sig_p,"ret_cor_sig_p.csv")
+```
+```{r}
+cor_df <- read.csv("ret_cor_sig_p.csv", header = TRUE, sep=",")
+head(cor_df)
+```
+#Extracting variables for analysis
+```{r}
+#depedent variable coded as a factor for classification
+dv_class <- as.factor(dv)
+expl_Var <- subset(final_df,select=c(cor_df[,c(1)]))
+
+#cbind dv and ind_vars
+df_final <- cbind(expl_Var,dv_class)
+head(df_final)
+```
+
+ IMPLEMENT CLASSIFICATION ALGORITHMS
+###============================================
+---Needed packages
+-- caret: collection of predictive analytic tools\
+-- randomForest: for Random Forest classifier
+-- adabag: for bagging classifier
+-- ada: adaboost classifier
+-- xgboost: for xgboost classifier
+-- neuralnet: for neural net classifier
+-- e1071: for SVM and Naive Bayes classifier
+-- naiveBayes: for Naive Bayes classifier
+-- rpart: for decision tree classifier
+-- rpart.plot: for plotting the decision tree
+-- broom: for data augmentation
+#======================================
+
+```{r}
+required_pkgs <- c("caret","randomforest","adabag","ada","xgboost","neuralnet","e1071","naivebayes","rpart","rpart.plot","broom")
+
+##Use for loop to install and load packages
+for(pkg in required_pkgs){
+  if(!require(pkg,character.only = TRUE)) install.packages(pkg)
+  
+  ##load the given package
+ # library(pkg,character.only = FALSE)
+}
+```
+```{r}
+#install.packages(c("randomForest","naivebayes"))
+required_pkgs1 <- c("caret","randomForest","xgboost","neuralnet","e1071","naivebayes","rpart","rpart.plot","broom")
+for(pkg in required_pkgs1){
+  library(pkg, character.only = TRUE)
+}
+```
+
+```{r}
+library(randomForest)
+#install.packages("adabag")
+library(adabag)
+#install.packages("ada")
+library(ada)
+#install.packages("xgboost")
+library(xgboost)
+#install.packages("neuralnet")
+library(neuralnet)
+#install.packages("e1071")
+library(e1071)
+#install.packages("naivebayes")
+library(naivebayes)
+#install.packages("rpart")
+library(rpart)
+install.packages("rpart.plot")
+library(rpart.plot)
+install.packages("broom")
+library(broom)
+```
+
+```{r}
+set.seed(123)
+train_size <- nrow(df_final)*0.7
+train_rows <- sample(1:nrow(df_final), size=train_size) #gives row indices
+#extract subsample that matches the row indices randomly selected
+train_df <- df_final[train_rows,]
+test_df <- df_final[-train_rows,]
+nrow(train_df)
+nrow(test_df)
+head(train_df)
+```
+###Random Forest Classifier
+##=================================
+
+```{r}
+rf_train <- randomForest( ~.,data=train_df)
+```
+
+##3.4: Bagging Classifier
+##================================
+```{r}
+library(adabag)
+bag_train <-bagging(dv_class~., data=train_df,  control=rpart.control(minsplit = 2,cp=0.001))
+```
+
+##3.5: AdaBoost Classifier
+##===============================
+```{r}
+library(ada)
+ada_train <- ada(dv_class~., data=train_df, type="gentle")
+```
+##3.6: Linear SVM
+##=====================================
+```{r}
+library(e1071)
+linear_svm <- svm(dv_class ~., data=train_df, kernel="linear")
+```
+##3:7: Non-Linear SVM
+##===================================
+```{r}
+nonlinear_svm <- svm(dv_class ~., data=train_df, kernel="radial")
+```
+
+
+##3.8: Neural Network Classifier (Simple Perceptron)
+##============================
+```{r}
+library(neuralnet)
+nn_train <- neuralnet(dv_class ~., data=train_df,hidden=3,act.fct="logistic")
+#plot(nn_train)
+```
